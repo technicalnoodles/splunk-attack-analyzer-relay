@@ -1,61 +1,34 @@
+const auth = require('../../utils/auth.js');
+const axios = require('axios');
+const JOBS_SEARCH = '/jobs/urls';
+const SAA_BASE_URL = 'https://api.global2.twinwave.io/v1';
+
 const urlLoopRefer = async (observableArray) => {
   let returnData = [];
   for (const observable of observableArray) {
-    // file pivots
-    if (observable.type === 'sha256') {
-      console.log(`Processing URL: ${observable.value}`);
-      const observable_link = `https://app.global2.twinwave.io/search?mode=forensics&term=${observable.value}&field=sha256`;
-      await returnData.push({
-        id: `ref-saa-search-url-${observable.value}`,
-        title: 'Search for this SHA256',
-        description: 'Lookup this SHA256 in SAA',
-        url: observable_link,
-      });
-      console.log(returnData);
-    }
-    if (observable.type === 'md5') {
-      console.log(`Processing URL: ${observable.value}`);
-      const observable_link = `https://app.global2.twinwave.io/search?mode=forensics&term=${observable.value}&field=md5`;
-      await returnData.push({
-        id: `ref-saa-search-url-${observable.value}`,
-        title: 'Search for this MD5',
-        description: 'Lookup this MD5 in SAA',
-        url: observable_link,
-      });
-      console.log(returnData);
-    }
-
-    //web pivots
     if (observable.type === 'url') {
       console.log(`Processing URL: ${observable.value}`);
-      const observable_link = `https://app.global2.twinwave.io/search?mode=forensics&term=${observable.value}&field=url`;
       await returnData.push({
-        id: `ref-saa-search-url-${observable.value}`,
-        title: 'Search for this URL',
-        description: 'Lookup this URL in SAA',
-        url: observable_link,
+        id: `ref-saa-respond-url`,
+        title: 'Analyze URL in SAA',
+        description: 'Submit this URL to SAA',
+        'query-params': {
+          observable_value: observable.value,
+          observable_type: observable.type,
+        },
       });
       console.log(returnData);
     }
     if (observable.type === 'domain') {
       console.log(`Processing URL: ${observable.value}`);
-      const observable_link = `https://app.global2.twinwave.io/search?mode=forensics&term=${observable.value}&field=domain`;
       await returnData.push({
-        id: `ref-saa-search-url-${observable.value}`,
-        title: 'Search for this domain',
-        description: 'Lookup this domain in SAA',
-        url: observable_link,
-      });
-      console.log(returnData);
-    }
-    if (observable.type === 'ip') {
-      console.log(`Processing URL: ${observable.value}`);
-      const observable_link = `https://app.global2.twinwave.io/search?mode=forensics&term=${observable.value}&field=ip`;
-      await returnData.push({
-        id: `ref-saa-search-url-${observable.value}`,
-        title: 'Search for this IP',
-        description: 'Lookup this IP in SAA',
-        url: observable_link,
+        id: 'ref-saa-respond-domain',
+        title: 'Analyze Domain in SAA',
+        description: 'Submit this domain to SAA',
+        'query-params': {
+          observable_value: observable.value,
+          observable_type: observable.type,
+        },
       });
       console.log(returnData);
     }
@@ -64,10 +37,91 @@ const urlLoopRefer = async (observableArray) => {
   return returnData;
 };
 
+const exData = {
+  observable_type: 'url',
+  observable_value: 'http://gooogle.com/',
+  'action-id': 'ref-saa-respond-url',
+};
+
+const submitDomain = async (observable, apiKey) => {
+  const data = {
+    url: `https://${observable}`,
+    priority: 1,
+    // engines: ['string'],
+  };
+  const request = await axios.post(
+    'https://api.global2.twinwave.io/v1/jobs/urls',
+    data,
+    {
+      headers: {
+        'X-API-Key': apiKey,
+      },
+    }
+  );
+  const responseData = await request.data;
+  if (responseData && responseData['JobID']) {
+    console.log('URL submitted successfully:', responseData);
+    return true;
+  }
+};
+const submitUrl = async (observable, apiKey) => {
+  console.log('Submitting URL:', observable);
+  const data = {
+    url: observable,
+    priority: 1,
+  };
+  const request = await axios.post(
+    'https://api.global2.twinwave.io/v1/jobs/urls',
+    data,
+    {
+      headers: {
+        'X-API-Key': apiKey,
+      },
+    }
+  );
+  const responseData = await request.data;
+  if (responseData && responseData['JobID']) {
+    console.log('URL submitted successfully:', responseData);
+    return true;
+  }
+};
+
+const respondHandler = async (observable, apiKey) => {
+  //   const authParams = await auth.getAuthHeaders();
+  if (observable['action-id'] === 'ref-saa-respond-url') {
+    return await submitUrl(observable['observable_value'], apiKey);
+  }
+  if (observable['action-id'] === 'ref-saa-respond-domain') {
+    return await submitDomain(observable['observable_value'], apiKey);
+  }
+  return false;
+};
+
 module.exports = (app) => {
   app.post('/respond/observables', async (req, res) => {
     const observables = req.body;
     const returnData = await urlLoopRefer(observables);
     res.send({ data: returnData });
+  });
+
+  app.post('/respond/trigger', async (req, res) => {
+    const observables = req.body;
+    const apiKey = await auth.getAuthHeaders();
+    console.log(observables);
+    await respondHandler(observables, apiKey)
+      .then((data) => {
+        if (data) {
+          res.send({
+            data: {
+              status: 'success',
+            },
+          });
+        } else {
+          res.status(500).send({ error: 'Failed to submit observable' });
+        }
+      })
+      .catch((error) => {
+        console.error('Error in respondHandler:', error);
+      });
   });
 };

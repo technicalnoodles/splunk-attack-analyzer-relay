@@ -1,5 +1,7 @@
 const axios = require('axios');
+import { getAuthHeaders } from '../../../utils/auth.js';
 const getSaaData = async (offset, timeFrame) => {
+  const apiKey = await getAuthHeaders();
   let response = await axios.get(
     'https://api.global2.twinwave.io/v1/jobs/poll',
     {
@@ -8,7 +10,7 @@ const getSaaData = async (offset, timeFrame) => {
         token: offset,
       },
       headers: {
-        'X-API-Key': '',
+        'X-API-Key': apiKey,
         'Cache-Control': 'no-cache, no-store, must-revalidate',
       },
     }

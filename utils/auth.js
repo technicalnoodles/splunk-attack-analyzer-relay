@@ -1,4 +1,6 @@
-const axios = require('axios');
-module.exports = authHelpers => {
-  const s = 's'
+const keys = require('../config/keys');
+module.exports = {
+  getAuthHeaders: async function () {
+    return keys['X-API-KEY'];
+  },
 };
